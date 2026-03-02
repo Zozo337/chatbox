@@ -15,6 +15,7 @@
     .top { padding:16px 16px 0 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .title { font-size:18px; font-weight:800; letter-spacing:.2px; }
     .sub { font-size:12px; color: var(--mut); margin-top:4px; }
+
     .user { padding: 0 16px 12px 16px; color: var(--mut); font-size: 13px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .badge { font-size:12px; border:1px solid var(--b); padding:4px 10px; border-radius:999px; background:#fff; }
     .badge.ok { border-color:#86efac; background:#f0fdf4; color:#166534; }
@@ -34,8 +35,8 @@
     button { padding: 10px 14px; border-radius: 12px; border:1px solid var(--b); background:#fff; cursor:pointer; font-weight:700; }
     button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
     button:disabled { opacity:.6; cursor:not-allowed; }
+
     .hint { padding: 0 16px 14px 16px; color: var(--mut); font-size: 12px; }
-    .line { height:1px; background: var(--b); margin: 12px 0; }
   </style>
 </head>
 
@@ -50,10 +51,10 @@
         <div id="signin"></div>
       </div>
 
+      <!-- ✅ 只保留：登入資訊 + agent 權限 -->
       <div class="user">
         <span id="userText">尚未登入</span>
         <span id="agentBadge" class="badge no">agent：未知</span>
-        <span class="badge">API：<span id="apiText"></span></span>
       </div>
 
       <div id="chat">
@@ -72,12 +73,8 @@
   </div>
 
   <script>
-    // ✅ 你只要改這個
     const GOOGLE_CLIENT_ID = "321508868274-c4j4s7c91j4vvbg39a59kcck99nginhv.apps.googleusercontent.com";
-    // ✅ 你已經搞定 https proxy 了
     const API_BASE = "https://zozochatbox.duckdns.org";
-
-    document.getElementById("apiText").textContent = API_BASE;
 
     let googleIdToken = null;
     let isSending = false;
@@ -119,6 +116,20 @@
       sendBtn.textContent = v ? "送出中…" : "送出";
     }
 
+    // ✅ 前端解 JWT（只用來顯示 email，不做安全判斷）
+    function decodeJwtPayload(jwt) {
+      try {
+        const b64 = jwt.split(".")[1];
+        const b64url = b64.replace(/-/g, "+").replace(/_/g, "/");
+        const json = decodeURIComponent(atob(b64url).split("").map(c =>
+          "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join(""));
+        return JSON.parse(json);
+      } catch {
+        return {};
+      }
+    }
+
     async function sendMessage() {
       const msg = input.value.trim();
       if (!msg || !googleIdToken || isSending) return;
@@ -127,7 +138,6 @@
       append("me", msg);
       setSending(true);
 
-      // 先顯示一個 loading 氣泡
       const loadingRow = document.createElement("div");
       loadingRow.className = "row ai";
       const loadingBubble = document.createElement("div");
@@ -144,7 +154,6 @@
             "Content-Type": "application/json",
             "Authorization": `Bearer ${googleIdToken}`,
           },
-          // 你後端 extract_text 可以抓 text
           body: JSON.stringify({ text: msg }),
         });
 
@@ -155,7 +164,7 @@
           return;
         }
 
-        // 更新登入資訊（後端會回 authed_email / agent_allowed）
+        // ✅ 後端驗證後回傳的 email / agent_allowed（以後端為準）
         if (data.authed_email) userText.textContent = "已登入：" + data.authed_email;
         if (typeof data.agent_allowed === "boolean") setAgentBadge(data.agent_allowed);
 
@@ -181,8 +190,15 @@
         client_id: GOOGLE_CLIENT_ID,
         callback: (resp) => {
           googleIdToken = resp.credential;
-          userText.textContent = "✅ 已登入（token 已取得）";
+
+          // ✅ 立刻顯示 email（更像產品，不顯示 token）
+          const payload = decodeJwtPayload(googleIdToken);
+          const email = payload.email || "（已登入）";
+          userText.textContent = "已登入：" + email;
+
+          // agent 先未知，等第一次打後端再更新成有/無權限
           setAgentBadge(null);
+
           input.disabled = false;
           sendBtn.disabled = false;
           append("ai", "登入完成！可以開始對話了。");
