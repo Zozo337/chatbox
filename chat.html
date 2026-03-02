@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AI Chat + Google SSO</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      body { font-family: system-ui, -apple-system, "Segoe UI"; margin: 24px; }
+      #chat { border: 1px solid #ddd; padding: 12px; height: 360px; overflow: auto; border-radius: 10px; }
+      .msg { margin: 8px 0; }
+      .me { font-weight: 700; }
+      .ai { color: #333; }
+      #row { display: flex; gap: 8px; margin-top: 12px; }
+      input { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #ddd; }
+      button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; cursor: pointer; }
+      #user { margin: 10px 0; color: #555; }
+    </style>
+  </head>
+  <body>
+    <h2>AI Chat（Google 單點登入）</h2>
+
+    <div id="signin"></div>
+    <div id="user"></div>
+
+    <div id="chat"></div>
+
+    <div id="row">
+      <input id="input" placeholder="輸入訊息…" disabled />
+      <button id="send" disabled>送出</button>
+    </div>
+
+    <script>
+      // 🔥 把這兩個換成你的
+      const GOOGLE_CLIENT_ID = "321508868274-c4j4s7c91j4vvbg39a59kcck99nginhv.apps.googleusercontent.com";
+      const API_BASE = "https://your-backend-domain.com"; 
+      // 例如:
+      // const API_BASE = "http://3.25.50.52:9001";
+
+      let googleIdToken = null;
+
+      const chat = document.getElementById("chat");
+      const input = document.getElementById("input");
+      const sendBtn = document.getElementById("send");
+      const userDiv = document.getElementById("user");
+
+      function append(role, text) {
+        const div = document.createElement("div");
+        div.className = "msg " + (role === "me" ? "me" : "ai");
+        div.textContent = (role === "me" ? "你：" : "AI：") + text;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      async function sendMessage() {
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        if (!googleIdToken) {
+          append("ai", "請先登入 Google");
+          return;
+        }
+
+        input.value = "";
+        append("me", msg);
+
+        try {
+          const res = await fetch(`${API_BASE}/parse`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${googleIdToken}`,
+            },
+            body: JSON.stringify({
+              text: msg
+            }),
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            append("ai", "發生錯誤：" + JSON.stringify(data));
+            return;
+          }
+
+          append("ai", data.reply || "沒有回傳內容");
+        } catch (err) {
+          append("ai", "連線失敗：" + err.message);
+        }
+      }
+
+      sendBtn.onclick = sendMessage;
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendMessage();
+      });
+
+      // Google Sign-In
+      window.onload = function () {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (resp) => {
+            googleIdToken = resp.credential;
+
+            userDiv.textContent = "✅ 已登入 Google";
+            input.disabled = false;
+            sendBtn.disabled = false;
+          },
+        });
+
+        google.accounts.id.renderButton(
+          document.getElementById("signin"),
+          { theme: "outline", size: "large" }
+        );
+      };
+    </script>
+  </body>
+</html>
