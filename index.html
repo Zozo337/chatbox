@@ -7,36 +7,46 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <style>
-    :root { --b:#e5e7eb; --t:#111827; --mut:#6b7280; --bg:#f9fafb; }
+    :root { --b:#e5e7eb; --t:#111827; --mut:#6b7280; --bg:#f9fafb; --primary: #2563eb; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI"; background: var(--bg); color: var(--t); }
+    body { margin:0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--t); }
     .wrap { max-width: 900px; margin: 0 auto; padding: 20px; }
-    .card { background:#fff; border:1px solid var(--b); border-radius:16px; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
-    .top { padding:16px 16px 0 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-    .title { font-size:18px; font-weight:800; letter-spacing:.2px; }
-    .sub { font-size:12px; color: var(--mut); margin-top:4px; }
+    .card { background:#fff; border:1px solid var(--b); border-radius:16px; box-shadow: 0 4px 12px rgba(0,0,0,.05); overflow: hidden; }
+    
+    /* Header Section */
+    .top { padding:20px 20px 0 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .title { font-size:20px; font-weight:800; letter-spacing:-0.02em; }
+    
+    /* User Status Section */
+    .user-status { padding: 8px 20px 16px 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    #userEmail { color: var(--mut); font-size: 14px; font-weight: 500; }
+    .badge { font-size:12px; border:1px solid var(--b); padding:4px 12px; border-radius:999px; font-weight: 600; transition: all 0.3s; }
+    .badge.ok { border-color:#86efac; background:#f0fdf4; color:#166534; } /* 有權限：綠色 */
+    .badge.no { border-color:#fecaca; background:#fef2f2; color:#991b1b; } /* 無權限：紅色 */
+    .badge.wait { border-color:#d1d5db; background:#f3f4f6; color:#4b5563; } /* 未知：灰色 */
 
-    .user { padding: 0 16px 12px 16px; color: var(--mut); font-size: 13px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .badge { font-size:12px; border:1px solid var(--b); padding:4px 10px; border-radius:999px; background:#fff; }
-    .badge.ok { border-color:#86efac; background:#f0fdf4; color:#166534; }
-    .badge.no { border-color:#fecaca; background:#fef2f2; color:#991b1b; }
-
-    #chat { height: 520px; overflow:auto; padding: 12px 16px 16px 16px; border-top:1px solid var(--b); border-bottom:1px solid var(--b); }
-    .row { display:flex; margin: 10px 0; }
-    .bubble { max-width: 78%; padding: 10px 12px; border-radius: 14px; border:1px solid var(--b); line-height:1.45; white-space: pre-wrap; word-break: break-word; }
+    /* Chat Area */
+    #chat { height: 500px; overflow-y:auto; padding: 20px; border-top:1px solid var(--b); border-bottom:1px solid var(--b); background: #fff; }
+    .row { display:flex; margin-bottom: 16px; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .bubble { max-width: 80%; padding: 12px 16px; border-radius: 18px; line-height:1.5; font-size: 15px; white-space: pre-wrap; word-break: break-word; }
     .me { justify-content:flex-end; }
-    .me .bubble { background:#111827; color:#fff; border-color:#111827; }
+    .me .bubble { background: var(--t); color:#fff; border-bottom-right-radius: 4px; }
     .ai { justify-content:flex-start; }
-    .ai .bubble { background:#fff; color:#111827; }
+    .ai .bubble { background:#f3f4f6; color: var(--t); border-bottom-left-radius: 4px; }
 
-    .composer { padding: 12px 16px; display:flex; gap:10px; align-items:flex-end; }
-    textarea { flex:1; min-height: 46px; max-height: 160px; resize: vertical; padding: 10px 12px; border-radius: 12px; border:1px solid var(--b); font-size: 14px; outline:none; }
-    textarea:disabled { background:#f3f4f6; }
-    button { padding: 10px 14px; border-radius: 12px; border:1px solid var(--b); background:#fff; cursor:pointer; font-weight:700; }
-    button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
-    button:disabled { opacity:.6; cursor:not-allowed; }
+    /* Input Area */
+    .composer { padding: 16px 20px; display:flex; gap:12px; align-items:flex-end; background: #fff; }
+    textarea { flex:1; min-height: 48px; max-height: 150px; resize: none; padding: 12px 16px; border-radius: 12px; border:1px solid var(--b); font-size: 15px; outline:none; transition: border-color 0.2s; }
+    textarea:focus { border-color: var(--primary); }
+    textarea:disabled { background:#f9fafb; cursor: not-allowed; }
+    
+    button { padding: 0 20px; height: 48px; border-radius: 12px; border:none; background: var(--primary); color:#fff; cursor:pointer; font-weight:700; transition: opacity 0.2s; }
+    button:hover:not(:disabled) { opacity: 0.9; }
+    button:disabled { background: #cbd5e1; cursor:not-allowed; }
 
-    .hint { padding: 0 16px 14px 16px; color: var(--mut); font-size: 12px; }
+    .hint { padding: 0 20px 20px 20px; color: var(--mut); font-size: 12px; }
   </style>
 </head>
 
@@ -44,29 +54,28 @@
   <div class="wrap">
     <div class="card">
       <div class="top">
-        <div>
-          <div class="title">Zozo AI ChatBox</div>
-        </div>
-        <div id="signin"></div>
+        <div class="title">Zozo AI ChatBox</div>
+        <div id="signinBtn"></div>
       </div>
 
-      <!-- ✅ 只保留：登入資訊 + agent 權限 -->
-      <div class="user">
-        <span id="userText">尚未登入</span>
-        <span id="agentBadge" class="badge no">agent：未知</span>
+      <div class="user-status">
+        <span id="userEmail">尚未登入 Google</span>
+        <span id="agentBadge" class="badge wait">Agent：未知</span>
       </div>
 
       <div id="chat">
-        <div class="row ai"><div class="bubble">先登入 Google，然後你就可以開始對話。</div></div>
+        <div class="row ai">
+          <div class="bubble">請先完成 Google 登入，即可開始與 AI 對話。</div>
+        </div>
       </div>
 
       <div class="composer">
-        <textarea id="input" placeholder="輸入訊息…（Enter 送出 / Shift+Enter 換行）" disabled></textarea>
-        <button id="send" class="primary" disabled>送出</button>
+        <textarea id="userInput" placeholder="輸入訊息… (Enter 送出)" disabled></textarea>
+        <button id="sendBtn" disabled>送出</button>
       </div>
 
       <div class="hint">
-        小提醒：如果你看到 agent = 無權限，代表你的 email 不在 allowlist，系統只會聊天不做動（安全設計）。
+        💡 提示：若 Agent 顯示「無權限」，代表您的 Email 未在白名單內，AI 將僅提供純聊天功能。
       </div>
     </div>
   </div>
@@ -76,140 +85,131 @@
     const API_BASE = "https://zozochatbox.duckdns.org";
 
     let googleIdToken = null;
-    let isSending = false;
+    let isProcessing = false;
 
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("input");
-    const sendBtn = document.getElementById("send");
-    const userText = document.getElementById("userText");
+    // DOM 元素
+    const chatContainer = document.getElementById("chat");
+    const inputField = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const userEmailText = document.getElementById("userEmail");
     const agentBadge = document.getElementById("agentBadge");
 
-    function append(role, text) {
-      const row = document.createElement("div");
-      row.className = "row " + (role === "me" ? "me" : "ai");
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      bubble.textContent = text;
-      row.appendChild(bubble);
-      chat.appendChild(row);
-      chat.scrollTop = chat.scrollHeight;
+    // 1. JWT 解碼 (純前端顯示用)
+    function decodeJwt(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(window.atob(base64));
+      } catch (e) { return {}; }
     }
 
-    function setAgentBadge(agentAllowed) {
+    // 2. 更新 UI 狀態
+    function updateUIStatus(email, agentAllowed = null) {
+      if (email) userEmailText.textContent = `已登入：${email}`;
+      
       if (agentAllowed === true) {
         agentBadge.className = "badge ok";
-        agentBadge.textContent = "agent：有權限";
+        agentBadge.textContent = "Agent：有權限";
       } else if (agentAllowed === false) {
         agentBadge.className = "badge no";
-        agentBadge.textContent = "agent：無權限";
+        agentBadge.textContent = "Agent：無權限";
       } else {
-        agentBadge.className = "badge no";
-        agentBadge.textContent = "agent：未知";
+        agentBadge.className = "badge wait";
+        agentBadge.textContent = "Agent：確認中...";
       }
     }
 
-    function setSending(v) {
-      isSending = v;
-      input.disabled = !googleIdToken || v;
-      sendBtn.disabled = !googleIdToken || v;
-      sendBtn.textContent = v ? "送出中…" : "送出";
+    // 3. 對話框渲染
+    function appendMessage(role, text) {
+      const row = document.createElement("div");
+      row.className = `row ${role === "me" ? "me" : "ai"}`;
+      row.innerHTML = `<div class="bubble">${text}</div>`;
+      chatContainer.appendChild(row);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return row.querySelector('.bubble');
     }
 
-    // ✅ 前端解 JWT（只用來顯示 email，不做安全判斷）
-    function decodeJwtPayload(jwt) {
-      try {
-        const b64 = jwt.split(".")[1];
-        const b64url = b64.replace(/-/g, "+").replace(/_/g, "/");
-        const json = decodeURIComponent(atob(b64url).split("").map(c =>
-          "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
-        ).join(""));
-        return JSON.parse(json);
-      } catch {
-        return {};
-      }
-    }
+    // 4. 發送訊息邏輯
+    async function handleSend() {
+      const text = inputField.value.trim();
+      if (!text || !googleIdToken || isProcessing) return;
 
-    async function sendMessage() {
-      const msg = input.value.trim();
-      if (!msg || !googleIdToken || isSending) return;
+      inputField.value = "";
+      appendMessage("me", text);
+      
+      isProcessing = true;
+      sendBtn.disabled = true;
+      inputField.disabled = true;
 
-      input.value = "";
-      append("me", msg);
-      setSending(true);
-
-      const loadingRow = document.createElement("div");
-      loadingRow.className = "row ai";
-      const loadingBubble = document.createElement("div");
-      loadingBubble.className = "bubble";
-      loadingBubble.textContent = "思考中…";
-      loadingRow.appendChild(loadingBubble);
-      chat.appendChild(loadingRow);
-      chat.scrollTop = chat.scrollHeight;
+      const loadingBubble = appendMessage("ai", "思考中...");
 
       try {
-        const res = await fetch(`${API_BASE}/parse`, {
+        const response = await fetch(`${API_BASE}/parse`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${googleIdToken}`,
+            "Authorization": `Bearer ${googleIdToken}`
           },
-          body: JSON.stringify({ text: msg }),
+          body: JSON.stringify({ text })
         });
 
-        const data = await res.json().catch(() => ({}));
+        const data = await response.json();
 
-        if (!res.ok) {
-          loadingBubble.textContent = "（錯誤）" + (data.error || JSON.stringify(data) || "unknown");
+        if (!response.ok) {
+          loadingBubble.textContent = `錯誤：${data.error || '連線不穩定'}`;
           return;
         }
 
-        // ✅ 後端驗證後回傳的 email / agent_allowed（以後端為準）
-        if (data.authed_email) userText.textContent = "已登入：" + data.authed_email;
-        if (typeof data.agent_allowed === "boolean") setAgentBadge(data.agent_allowed);
+        // 根據後端回傳更新狀態 (後端權限為準)
+        if (data.authed_email) userEmailText.textContent = `已登入：${data.authed_email}`;
+        if (typeof data.agent_allowed === "boolean") {
+          updateUIStatus(null, data.agent_allowed);
+        }
 
-        loadingBubble.textContent = data.reply || "（沒有回傳 reply）";
+        loadingBubble.textContent = data.reply || "收到了，但我暫時無法回答。";
+
       } catch (err) {
-        loadingBubble.textContent = "（連線失敗）" + err.message;
+        loadingBubble.textContent = "連線失敗，請檢查網路設定。";
       } finally {
-        setSending(false);
+        isProcessing = false;
+        sendBtn.disabled = false;
+        inputField.disabled = false;
+        inputField.focus();
       }
     }
 
-    sendBtn.addEventListener("click", sendMessage);
-
-    input.addEventListener("keydown", (e) => {
+    // 5. 事件監聽
+    sendBtn.addEventListener("click", handleSend);
+    inputField.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        handleSend();
       }
     });
 
-    window.onload = function () {
+    // 6. Google 登入初始化
+    window.onload = () => {
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: (resp) => {
-          googleIdToken = resp.credential;
+        callback: (response) => {
+          googleIdToken = response.credential;
+          
+          // 立即解析 Token 顯示 Email
+          const profile = decodeJwt(googleIdToken);
+          updateUIStatus(profile.email, null);
 
-          // ✅ 立刻顯示 email（更像產品，不顯示 token）
-          const payload = decodeJwtPayload(googleIdToken);
-          const email = payload.email || "（已登入）";
-          userText.textContent = "已登入：" + email;
-
-          // agent 先未知，等第一次打後端再更新成有/無權限
-          setAgentBadge(null);
-
-          input.disabled = false;
+          // 解鎖輸入
+          inputField.disabled = false;
           sendBtn.disabled = false;
-          append("ai", "登入完成！可以開始對話了。");
-        },
+          appendMessage("ai", "驗證成功！請問有什麼我可以幫您的？");
+        }
       });
 
       google.accounts.id.renderButton(
-        document.getElementById("signin"),
+        document.getElementById("signinBtn"),
         { theme: "outline", size: "large", text: "signin_with" }
       );
     };
   </script>
 </body>
 </html>
-
