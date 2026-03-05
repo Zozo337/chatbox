@@ -78,7 +78,7 @@
 
   <script>
     const GOOGLE_CLIENT_ID = "321508868274-c4j4s7c91j4vvbg39a59kcck99nginhv.apps.googleusercontent.com";
-    const API_BASE = "https://zozochatbox.duckdns.org"; 
+    const API_BASE = "https://zozochatbox.duckdns.org";
     const STORAGE_KEY = "zozo_id_token";
 
     // ✅ SSE 專用網域（9002 綁的）
@@ -102,7 +102,7 @@
     let googleIdToken = null;
     let isSending = false;
 
-    // ✅ SSE 連線物件（新增，不影響你原本功能）
+    // ✅ SSE 連線（新增，不影響你原本功能）
     let sse = null;
     let sseForStream = null;
 
@@ -171,14 +171,13 @@
         sse = new EventSource(url);
         sseForStream = streamId;
 
-        // hello 只是確認連線成功（不打擾 UI）
         sse.addEventListener("hello", () => {});
 
         sse.addEventListener("message", (e) => {
           try {
             const payload = JSON.parse(e.data || "{}");
 
-            // ✅ 最符合你要的：callback.py 會推 payload.message（整段文字）
+            // ✅ 優先顯示 callback.py 推的 message（整段文字）
             if (payload && payload.message) {
               append("ai", payload.message);
               return;
@@ -191,7 +190,7 @@
           }
         });
 
-        // error：瀏覽器會自動重連，這邊不要吵 UI
+        // error：瀏覽器會自動重連，這邊不打擾 UI
         sse.addEventListener("error", () => {});
       } catch (e) {
         // 建立失敗也沒差，輪詢備援還在
@@ -258,12 +257,13 @@
     async function handleRequestIds(requestIds) {
       if (!Array.isArray(requestIds) || requestIds.length === 0) return;
 
-      // ✅ 不改你原本流程：照樣輪詢
+      // ✅ 不改你原本流程：照樣輪詢（但你原本 pending 不想顯示就別顯示）
       for (const rid of requestIds) {
         if (!rid) continue;
         const rec = await pollAgentResult(rid);
         if (rec.status === "pending") {
-          append("ai", formatAgentRecord(rec));
+          // 這裡保持你現在邏輯：不另外顯示 pending
+          // append("ai", formatAgentRecord(rec));
         }
       }
     }
@@ -359,4 +359,3 @@
   </script>
 </body>
 </html>
-
