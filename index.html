@@ -263,8 +263,6 @@
         if (!rid) continue;
         const rec = await pollAgentResult(rid);
         if (rec.status === "pending") {
-          append("ai", `⏳ 仍在處理中：${rid}`);
-        } else {
           append("ai", formatAgentRecord(rec));
         }
       }
@@ -361,3 +359,4 @@
   </script>
 </body>
 </html>
+
