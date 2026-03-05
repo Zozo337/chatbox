@@ -79,9 +79,12 @@
   <script>
     const GOOGLE_CLIENT_ID = "321508868274-c4j4s7c91j4vvbg39a59kcck99nginhv.apps.googleusercontent.com";
     const API_BASE = "https://zozochatbox.duckdns.org"; 
-    const STORAGE_KEY = "zozo_id_token"; // 用於持久化儲存
+    const STORAGE_KEY = "zozo_id_token";
 
-    // ✅ 新增：stream_id（用來對應 Anycross callback / 前端輪詢）
+    // ✅ SSE 專用網域（9002 綁的）
+    const SSE_BASE = "https://zozocallback.duckdns.org";
+
+    // ✅ stream_id（用來對應 Anycross callback / SSE）
     const STREAM_KEY = "zozo_stream_id";
     let streamId = null;
 
@@ -98,6 +101,10 @@
 
     let googleIdToken = null;
     let isSending = false;
+
+    // ✅ SSE 連線物件（新增，不影響你原本功能）
+    let sse = null;
+    let sseForStream = null;
 
     // DOM 元素
     const chatBox = document.getElementById("chat");
@@ -135,30 +142,77 @@
       }
     }
 
-    // 登出
-    function handleLogout() {
-      localStorage.removeItem(STORAGE_KEY);
-
-      // ✅ 建議：登出就換新 stream_id（避免舊輪詢串到新登入）
-      localStorage.removeItem(STREAM_KEY);
-      streamId = initStreamId();
-
-      updateAuthUI(false);
-      append("ai", "您已登出，對話已結束。");
-    }
-
     function append(role, text) {
       const row = document.createElement("div");
       row.className = `row ${role === "me" ? "me" : "ai"}`;
       row.innerHTML = `<div class="bubble"></div>`;
       const bubble = row.querySelector('.bubble');
-      bubble.textContent = text; // ✅ 防止注入
+      bubble.textContent = text;
       chatBox.appendChild(row);
       chatBox.scrollTop = chatBox.scrollHeight;
       return bubble;
     }
 
-    // ✅ 新增：輪詢 Anycross callback 結果（你後端已做 /agent/result）
+    // ✅ SSE：啟動/停止（新增，不動既有功能）
+    function stopSSE() {
+      try { if (sse) sse.close(); } catch(e) {}
+      sse = null;
+      sseForStream = null;
+    }
+
+    function startSSE(force = false) {
+      if (!streamId) return;
+      if (!force && sse && sseForStream === streamId) return;
+
+      stopSSE();
+
+      const url = `${SSE_BASE}/agent/events?stream_id=${encodeURIComponent(streamId)}`;
+      try {
+        sse = new EventSource(url);
+        sseForStream = streamId;
+
+        // hello 只是確認連線成功（不打擾 UI）
+        sse.addEventListener("hello", () => {});
+
+        sse.addEventListener("message", (e) => {
+          try {
+            const payload = JSON.parse(e.data || "{}");
+
+            // ✅ 最符合你要的：callback.py 會推 payload.message（整段文字）
+            if (payload && payload.message) {
+              append("ai", payload.message);
+              return;
+            }
+
+            // 沒 message 就 fallback 用原本格式化顯示
+            append("ai", formatAgentRecord(payload));
+          } catch (err) {
+            append("ai", "（SSE 收到資料但解析失敗）");
+          }
+        });
+
+        // error：瀏覽器會自動重連，這邊不要吵 UI
+        sse.addEventListener("error", () => {});
+      } catch (e) {
+        // 建立失敗也沒差，輪詢備援還在
+      }
+    }
+
+    // 登出
+    function handleLogout() {
+      localStorage.removeItem(STORAGE_KEY);
+
+      // ✅ 登出：關 SSE + 換新 stream_id（避免串流串到下一個登入）
+      stopSSE();
+      localStorage.removeItem(STREAM_KEY);
+      streamId = initStreamId();
+      startSSE(true); // 用新 streamId 重新掛（不影響你未登入狀態）
+
+      updateAuthUI(false);
+      append("ai", "您已登出，對話已結束。");
+    }
+
+    // ✅ 原本輪詢（保留，不改）
     async function pollAgentResult(requestId, maxMs = 120000) {
       const start = Date.now();
       while (Date.now() - start < maxMs) {
@@ -170,11 +224,9 @@
           const data = await r.json();
 
           if (data && data.status && data.status !== "pending") {
-            return data; // success / failed / unknown
+            return data;
           }
-        } catch (e) {
-          // 忽略，繼續輪詢
-        }
+        } catch (e) {}
         await new Promise(res => setTimeout(res, 1500));
       }
       return { status: "pending", request_id: requestId, message: "timeout" };
@@ -205,7 +257,8 @@
 
     async function handleRequestIds(requestIds) {
       if (!Array.isArray(requestIds) || requestIds.length === 0) return;
-      // 多筆就逐筆輪詢並回報
+
+      // ✅ 不改你原本流程：照樣輪詢
       for (const rid of requestIds) {
         if (!rid) continue;
         const rec = await pollAgentResult(rid);
@@ -233,12 +286,10 @@
             "Content-Type": "application/json",
             "Authorization": `Bearer ${googleIdToken}`
           },
-          // ✅ 不改你原本結構，只多帶 stream_id
           body: JSON.stringify({ text, stream_id: streamId })
         });
         const data = await res.json();
         
-        // 更新 Agent 權限標籤
         if (typeof data.agent_allowed === "boolean") {
           agentBadge.className = `badge ${data.agent_allowed ? 'ok' : 'no'}`;
           agentBadge.textContent = `agent：${data.agent_allowed ? '有權限' : '無權限'}`;
@@ -246,7 +297,7 @@
 
         loading.textContent = data.reply || "（無回傳內容）";
 
-        // ✅ 新增：如果後端有回 request_ids，就開始輪詢 /agent/result
+        // ✅ 原本輪詢流程保留
         if (data && Array.isArray(data.request_ids) && data.request_ids.length > 0) {
           handleRequestIds(data.request_ids);
         }
@@ -270,6 +321,9 @@
       // ✅ 初始化 stream_id（每次載入都保留同一個，登出才刷新）
       streamId = initStreamId();
 
+      // ✅ 新增：頁面載入就先掛 SSE（不影響原功能）
+      startSSE(true);
+
       // 1. 初始化 Google 登入
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
@@ -279,21 +333,26 @@
           const email = decodeJwt(googleIdToken).email;
           updateAuthUI(true, email);
           append("ai", "驗證成功，歡迎使用！");
+
+          // ✅ 新增：登入後確保 SSE 連到目前 streamId
+          startSSE(true);
         }
       });
 
       // 2. 渲染按鈕
       google.accounts.id.renderButton(signinBtnDiv, { theme: "outline", size: "large" });
 
-      // 3. 檢查 LocalStorage 是否有舊 Token (解決重整就登出的問題)
+      // 3. 檢查 LocalStorage 是否有舊 Token
       const savedToken = localStorage.getItem(STORAGE_KEY);
       if (savedToken) {
         const profile = decodeJwt(savedToken);
-        // 檢查 Token 是否過期 (exp 是秒)
         if (profile.exp * 1000 > Date.now()) {
           googleIdToken = savedToken;
           updateAuthUI(true, profile.email);
           append("ai", "歡迎回來！登入狀態已自動恢復。");
+
+          // ✅ 新增：自動恢復後也確保 SSE
+          startSSE(true);
         } else {
           localStorage.removeItem(STORAGE_KEY);
         }
