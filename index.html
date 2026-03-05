@@ -81,6 +81,21 @@
     const API_BASE = "https://zozochatbox.duckdns.org"; 
     const STORAGE_KEY = "zozo_id_token"; // 用於持久化儲存
 
+    // ✅ 新增：stream_id（用來對應 Anycross callback / 前端輪詢）
+    const STREAM_KEY = "zozo_stream_id";
+    let streamId = null;
+
+    function genStreamId() {
+      return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+    function initStreamId() {
+      const saved = localStorage.getItem(STREAM_KEY);
+      if (saved) return saved;
+      const id = genStreamId();
+      localStorage.setItem(STREAM_KEY, id);
+      return id;
+    }
+
     let googleIdToken = null;
     let isSending = false;
 
@@ -123,6 +138,11 @@
     // 登出
     function handleLogout() {
       localStorage.removeItem(STORAGE_KEY);
+
+      // ✅ 建議：登出就換新 stream_id（避免舊輪詢串到新登入）
+      localStorage.removeItem(STREAM_KEY);
+      streamId = initStreamId();
+
       updateAuthUI(false);
       append("ai", "您已登出，對話已結束。");
     }
@@ -130,10 +150,71 @@
     function append(role, text) {
       const row = document.createElement("div");
       row.className = `row ${role === "me" ? "me" : "ai"}`;
-      row.innerHTML = `<div class="bubble">${text}</div>`;
+      row.innerHTML = `<div class="bubble"></div>`;
+      const bubble = row.querySelector('.bubble');
+      bubble.textContent = text; // ✅ 防止注入
       chatBox.appendChild(row);
       chatBox.scrollTop = chatBox.scrollHeight;
-      return row.querySelector('.bubble');
+      return bubble;
+    }
+
+    // ✅ 新增：輪詢 Anycross callback 結果（你後端已做 /agent/result）
+    async function pollAgentResult(requestId, maxMs = 120000) {
+      const start = Date.now();
+      while (Date.now() - start < maxMs) {
+        try {
+          const r = await fetch(`${API_BASE}/agent/result?request_id=${encodeURIComponent(requestId)}`, {
+            method: "GET",
+            headers: { "Accept": "application/json" }
+          });
+          const data = await r.json();
+
+          if (data && data.status && data.status !== "pending") {
+            return data; // success / failed / unknown
+          }
+        } catch (e) {
+          // 忽略，繼續輪詢
+        }
+        await new Promise(res => setTimeout(res, 1500));
+      }
+      return { status: "pending", request_id: requestId, message: "timeout" };
+    }
+
+    function formatAgentRecord(rec) {
+      const status = (rec.status || "").toLowerCase();
+      const ok = status === "success";
+      const intent = rec.intent || "unknown";
+      const msg = rec.message || "";
+
+      const r = rec.result || {};
+      const lines = [];
+      lines.push(`📌 作業結果：${ok ? "✅ 成功" : "❌ 失敗"}（${intent}）`);
+      if (r.name) lines.push(`姓名：${r.name}`);
+      if (r.email) lines.push(`Email：${r.email}`);
+      if (r.department) lines.push(`部門：${r.department}`);
+      if (r.position) lines.push(`職位：${r.position}`);
+      if (r.country) lines.push(`國家地區：${r.country}`);
+      if (r.supervisor) lines.push(`上級：${r.supervisor}`);
+      if (r.start_date) lines.push(`入職日期：${r.start_date}`);
+      if (r.new_name) lines.push(`新姓名：${r.new_name}`);
+      if (r.new_supervisor) lines.push(`新主管：${r.new_supervisor}`);
+      if (msg) lines.push(`原因/訊息：${msg}`);
+
+      return lines.join("\n");
+    }
+
+    async function handleRequestIds(requestIds) {
+      if (!Array.isArray(requestIds) || requestIds.length === 0) return;
+      // 多筆就逐筆輪詢並回報
+      for (const rid of requestIds) {
+        if (!rid) continue;
+        const rec = await pollAgentResult(rid);
+        if (rec.status === "pending") {
+          append("ai", `⏳ 仍在處理中：${rid}`);
+        } else {
+          append("ai", formatAgentRecord(rec));
+        }
+      }
     }
 
     async function sendMessage() {
@@ -152,7 +233,8 @@
             "Content-Type": "application/json",
             "Authorization": `Bearer ${googleIdToken}`
           },
-          body: JSON.stringify({ text })
+          // ✅ 不改你原本結構，只多帶 stream_id
+          body: JSON.stringify({ text, stream_id: streamId })
         });
         const data = await res.json();
         
@@ -161,7 +243,14 @@
           agentBadge.className = `badge ${data.agent_allowed ? 'ok' : 'no'}`;
           agentBadge.textContent = `agent：${data.agent_allowed ? '有權限' : '無權限'}`;
         }
+
         loading.textContent = data.reply || "（無回傳內容）";
+
+        // ✅ 新增：如果後端有回 request_ids，就開始輪詢 /agent/result
+        if (data && Array.isArray(data.request_ids) && data.request_ids.length > 0) {
+          handleRequestIds(data.request_ids);
+        }
+
       } catch (err) {
         loading.textContent = "（連線失敗）請檢查後端服務是否開啟。";
       } finally {
@@ -170,9 +259,17 @@
     }
 
     sendBtn.addEventListener("click", sendMessage);
-    userInput.addEventListener("keydown", (e) => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
+    userInput.addEventListener("keydown", (e) => { 
+      if(e.key === "Enter" && !e.shiftKey){ 
+        e.preventDefault(); 
+        sendMessage(); 
+      }
+    });
 
     window.onload = () => {
+      // ✅ 初始化 stream_id（每次載入都保留同一個，登出才刷新）
+      streamId = initStreamId();
+
       // 1. 初始化 Google 登入
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
